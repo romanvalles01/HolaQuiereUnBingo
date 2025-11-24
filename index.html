@@ -1,11 +1,667 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Document</title>
+    <title>Ciudad del Bingo - Prototipo jugable</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0b1221;
+        --panel: #111827;
+        --panel-2: #0f172a;
+        --text: #e5e7eb;
+        --muted: #9ca3af;
+        --accent: #22d3ee;
+        --accent-2: #f472b6;
+        --border: #1f2937;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+        background: radial-gradient(circle at 20% 20%, rgba(34, 211, 238, 0.08), transparent 25%),
+          radial-gradient(circle at 80% 0%, rgba(244, 114, 182, 0.08), transparent 25%),
+          var(--bg);
+        color: var(--text);
+      }
+      header {
+        padding: 20px 20px 12px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+      }
+      h1 {
+        margin: 0;
+        font-size: clamp(26px, 3vw, 32px);
+        letter-spacing: -0.02em;
+      }
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        background: rgba(34, 211, 238, 0.12);
+        color: var(--accent);
+        border-radius: 999px;
+        font-weight: 600;
+        font-size: 13px;
+        border: 1px solid rgba(34, 211, 238, 0.35);
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: 320px 1fr 340px;
+        gap: 16px;
+        padding: 0 16px 16px;
+      }
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 14px 16px;
+        box-shadow: 0 15px 50px rgba(0, 0, 0, 0.35);
+      }
+      #hud {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+      }
+      .stat {
+        background: var(--panel-2);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 10px 12px;
+        min-width: 140px;
+      }
+      .stat span {
+        display: block;
+      }
+      .stat .label {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .stat .value {
+        font-size: 18px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+      #game {
+        height: 600px;
+        background: #0a1020;
+        border-radius: 16px;
+        border: 1px solid var(--border);
+        position: relative;
+        overflow: hidden;
+      }
+      canvas {
+        width: 100%;
+        height: 100%;
+        border-radius: 12px;
+        display: block;
+      }
+      h2 {
+        margin: 0 0 10px;
+        font-size: 18px;
+        letter-spacing: -0.01em;
+      }
+      .list {
+        display: grid;
+        gap: 10px;
+      }
+      .item {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 10px 12px;
+        background: var(--panel-2);
+      }
+      .item header {
+        padding: 0;
+        margin: 0 0 6px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .item h3 {
+        margin: 0;
+        font-size: 15px;
+      }
+      .muted {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      button {
+        background: linear-gradient(120deg, var(--accent), #1fa4c3);
+        border: none;
+        color: #0b1221;
+        font-weight: 700;
+        padding: 8px 10px;
+        border-radius: 10px;
+        cursor: pointer;
+        min-width: 80px;
+      }
+      button:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .pill {
+        padding: 6px 8px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.05);
+      }
+      @media (max-width: 1100px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+        #game {
+          order: -1;
+        }
+      }
+    </style>
   </head>
   <body>
-    <h1>hi</h1>
+    <header>
+      <div class="tag">Protótipo jugable</div>
+      <h1>Ciudad del Bingo</h1>
+    </header>
+    <div class="layout">
+      <aside class="panel">
+        <h2>Estado</h2>
+        <div id="hud"></div>
+        <div class="controls" style="margin-top: 10px">
+          <div class="pill">Mover: WASD / Flechas</div>
+          <div class="pill">Interactuar casa: E</div>
+          <div class="pill">Comprar upgrade: clic</div>
+        </div>
+      </aside>
+      <section class="panel" id="game">
+        <canvas id="canvas" width="900" height="600"></canvas>
+      </section>
+      <aside class="panel">
+        <h2>Mejoras</h2>
+        <p class="muted">Aumenta probabilidad, velocidad, BPS y valor por bingo.</p>
+        <div class="list" id="upgrades"></div>
+      </aside>
+    </div>
+
+    <script>
+      const canvas = document.getElementById("canvas");
+      const ctx = canvas.getContext("2d");
+      const hud = document.getElementById("hud");
+      const upgradeList = document.getElementById("upgrades");
+
+      // --- Estado base y jugador ---
+      const state = {
+        money: 50,
+        bingos: 0,
+        valuePerBingo: 10,
+        bpsPassive: 0,
+        probAdd: 0,
+        probMult: 1,
+        speed: 150,
+        tick: 0,
+        activeVehicle: null,
+        lastSaleResult: null,
+      };
+
+      const player = {
+        x: 0,
+        y: 0,
+        r: 12,
+        color: "#22d3ee",
+      };
+      const camera = { x: 0, y: 0 };
+      const keys = new Set();
+
+      // --- Mundo procedural ---
+      const houses = [];
+      const generatedChunks = new Set();
+      const chunkSize = 320;
+      const streetSpacing = 220;
+      const streetWidth = 70;
+      const isoScale = 0.9;
+      const drones = [];
+
+      function isStreet(x, y) {
+        const dx = Math.abs(((x % streetSpacing) + streetSpacing) % streetSpacing - streetSpacing / 2);
+        const dy = Math.abs(((y % streetSpacing) + streetSpacing) % streetSpacing - streetSpacing / 2);
+        return dx < streetWidth / 2 || dy < streetWidth / 2;
+      }
+
+      function generateChunk(cx, cy) {
+        const key = `${cx},${cy}`;
+        if (generatedChunks.has(key)) return;
+        generatedChunks.add(key);
+        const startX = cx * chunkSize;
+        const startY = cy * chunkSize;
+        for (let x = startX + 40; x < startX + chunkSize - 40; x += 80) {
+          for (let y = startY + 40; y < startY + chunkSize - 40; y += 80) {
+            if (isStreet(x, y)) continue;
+            const colorHue = 210 + ((Math.abs(cx + cy) + (x + y)) % 40);
+            houses.push({
+              x,
+              y,
+              baseProb: 0.2 + Math.random() * 0.12,
+              cooldown: 0,
+              color: `hsl(${colorHue}, 62%, 65%)`,
+            });
+          }
+        }
+      }
+
+      function ensureChunksAroundPlayer() {
+        const cx = Math.floor(player.x / chunkSize);
+        const cy = Math.floor(player.y / chunkSize);
+        for (let dx = -1; dx <= 1; dx++) {
+          for (let dy = -1; dy <= 1; dy++) {
+            generateChunk(cx + dx, cy + dy);
+          }
+        }
+      }
+
+      // --- Mejoras y drones visibles ---
+      const upgrades = [
+        {
+          id: "pitch",
+          name: "Mejor discurso",
+          desc: "+5% probabilidad",
+          baseCost: 30,
+          factor: 1.2,
+          level: 0,
+          apply: () => (state.probAdd += 0.05),
+        },
+        {
+          id: "folletos",
+          name: "Folletos premium",
+          desc: "+3% prob, +0.2 BPS",
+          baseCost: 50,
+          factor: 1.18,
+          level: 0,
+          apply: () => {
+            state.probAdd += 0.03;
+            addBpsPassive(0.2);
+          },
+        },
+        {
+          id: "uniforme",
+          name: "Uniforme pro",
+          desc: "+10% velocidad",
+          baseCost: 80,
+          factor: 1.15,
+          level: 0,
+          apply: () => (state.speed *= 1.1),
+        },
+        {
+          id: "valor",
+          name: "Bingo premium",
+          desc: "+15% valor por bingo",
+          baseCost: 120,
+          factor: 1.22,
+          level: 0,
+          apply: () => (state.valuePerBingo *= 1.15),
+        },
+        {
+          id: "bike",
+          name: "Bicicleta",
+          desc: "+40% velocidad",
+          baseCost: 160,
+          factor: 1.35,
+          level: 0,
+          apply: () => {
+            state.speed *= 1.4;
+            state.activeVehicle = "Bicicleta";
+          },
+        },
+        {
+          id: "moto",
+          name: "Moto",
+          desc: "+100% velocidad, +5% prob",
+          baseCost: 320,
+          factor: 1.45,
+          level: 0,
+          apply: () => {
+            state.speed *= 2;
+            state.probAdd += 0.05;
+            state.activeVehicle = "Moto";
+          },
+        },
+        {
+          id: "drone",
+          name: "Dron básico",
+          desc: "+0.6 BPS (visible)",
+          baseCost: 90,
+          factor: 1.2,
+          level: 0,
+          apply: () => addDrone({ speed: 240, bps: 0.6, color: "#22d3ee" }),
+        },
+        {
+          id: "drone-adv",
+          name: "Dron avanzado",
+          desc: "+2 BPS (visible)",
+          baseCost: 250,
+          factor: 1.28,
+          level: 0,
+          apply: () => addDrone({ speed: 320, bps: 2, color: "#f472b6" }),
+        },
+        {
+          id: "megafono",
+          name: "Megáfono",
+          desc: "+8% prob multiplicativo",
+          baseCost: 200,
+          factor: 1.24,
+          level: 0,
+          apply: () => (state.probMult *= 1.08),
+        },
+        {
+          id: "vallas",
+          name: "Vallas en la ciudad",
+          desc: "+0.5 BPS y +5% valor",
+          baseCost: 280,
+          factor: 1.25,
+          level: 0,
+          apply: () => {
+            addBpsPassive(0.5);
+            state.valuePerBingo *= 1.05;
+          },
+        },
+      ];
+
+      function addBpsPassive(value) {
+        state.bpsPassive += value;
+      }
+
+      function addDrone(config) {
+        drones.push({
+          x: player.x,
+          y: player.y,
+          target: null,
+          speed: config.speed,
+          bps: config.bps,
+          color: config.color,
+        });
+        renderHud();
+      }
+
+      // --- HUD y upgrades ---
+      function format(num) {
+        return num >= 1000 ? num.toFixed(0) : num.toFixed(1);
+      }
+
+      function renderHud() {
+        const totalBps = state.bpsPassive + drones.reduce((acc, d) => acc + d.bps, 0);
+        hud.innerHTML = "";
+        const stats = [
+          { label: "Dinero", value: `$ ${state.money.toFixed(0)}` },
+          { label: "Bingos totales", value: state.bingos.toFixed(0) },
+          { label: "Bingos/seg", value: format(totalBps) },
+          { label: "Prob. base", value: `${((0.25 + state.probAdd) * state.probMult * 100).toFixed(0)}%` },
+          { label: "Velocidad", value: `${(state.speed / 150).toFixed(2)}x` },
+          { label: "Vehículo", value: state.activeVehicle || "A pie" },
+          { label: "Drones", value: drones.length },
+        ];
+        stats.forEach((s) => {
+          const div = document.createElement("div");
+          div.className = "stat";
+          div.innerHTML = `<span class="label">${s.label}</span><span class="value">${s.value}</span>`;
+          hud.appendChild(div);
+        });
+      }
+
+      function renderUpgrades() {
+        upgradeList.innerHTML = "";
+        upgrades.forEach((up) => {
+          const cost = up.baseCost * Math.pow(up.factor, up.level);
+          const item = document.createElement("div");
+          item.className = "item";
+          item.innerHTML = `
+            <header>
+              <h3>${up.name} <span class="muted">Lv.${up.level}</span></h3>
+              <button ${state.money < cost ? "disabled" : ""}>$ ${cost.toFixed(0)}</button>
+            </header>
+            <div class="muted">${up.desc}</div>
+          `;
+          const btn = item.querySelector("button");
+          btn.addEventListener("click", () => buyUpgrade(up));
+          upgradeList.appendChild(item);
+        });
+      }
+
+      function buyUpgrade(up) {
+        const cost = up.baseCost * Math.pow(up.factor, up.level);
+        if (state.money < cost) return;
+        state.money -= cost;
+        up.level += 1;
+        up.apply();
+        renderHud();
+        renderUpgrades();
+      }
+
+      // --- Ventas ---
+      function attemptSale(house) {
+        if (house.cooldown > 0) return;
+        const prob = Math.min(0.95, (house.baseProb + state.probAdd) * state.probMult);
+        const roll = Math.random();
+        const success = roll < prob;
+        house.cooldown = 1; // seconds
+        state.lastSaleResult = success ? "Vendido" : "Rechazado";
+        if (success) {
+          state.bingos += 1;
+          state.money += state.valuePerBingo;
+        }
+        renderHud();
+        renderUpgrades();
+      }
+
+      // --- Entrada y simulación ---
+      function update(delta) {
+        const vx = (keys.has("ArrowRight") || keys.has("d")) - (keys.has("ArrowLeft") || keys.has("a"));
+        const vy = (keys.has("ArrowDown") || keys.has("s")) - (keys.has("ArrowUp") || keys.has("w"));
+        const len = Math.hypot(vx, vy) || 1;
+        const speed = state.speed * delta;
+        player.x += (vx / len) * speed;
+        player.y += (vy / len) * speed;
+
+        ensureChunksAroundPlayer();
+
+        houses.forEach((h) => {
+          if (h.cooldown > 0) h.cooldown -= delta;
+        });
+
+        drones.forEach((d) => {
+          if (!d.target) d.target = pickHouseNearPlayer();
+          const target = d.target || { x: player.x, y: player.y };
+          const dx = target.x - d.x;
+          const dy = target.y - d.y;
+          const dist = Math.hypot(dx, dy);
+          if (dist > 4) {
+            d.x += (dx / dist) * d.speed * delta;
+            d.y += (dy / dist) * d.speed * delta;
+          } else {
+            d.target = pickHouseNearPlayer();
+          }
+        });
+
+        camera.x = player.x;
+        camera.y = player.y * 0.6; // ligera inclinación para sensación 3D
+      }
+
+      function pickHouseNearPlayer() {
+        if (houses.length === 0) return null;
+        const sorted = [...houses].sort(
+          (a, b) => Math.hypot(a.x - player.x, a.y - player.y) - Math.hypot(b.x - player.x, b.y - player.y)
+        );
+        return sorted[Math.min(sorted.length - 1, Math.floor(Math.random() * 6))] || null;
+      }
+
+      // --- Render isométrico ---
+      function worldToScreen(wx, wy, wz = 0) {
+        const rx = wx - camera.x;
+        const ry = wy - camera.y / 0.6;
+        const isoX = (rx - ry) * isoScale + canvas.width / 2;
+        const isoY = (rx + ry) * isoScale * 0.5 + canvas.height / 2 - wz;
+        return { x: isoX, y: isoY };
+      }
+
+      function drawHouse(h) {
+        const height = 26;
+        const base = worldToScreen(h.x, h.y);
+        const top = worldToScreen(h.x, h.y, -height);
+        ctx.fillStyle = "rgba(0,0,0,0.35)";
+        ctx.beginPath();
+        ctx.moveTo(base.x - 26, base.y - 8);
+        ctx.lineTo(base.x + 26, base.y + 8);
+        ctx.lineTo(base.x + 32, base.y + 18);
+        ctx.lineTo(base.x - 32, base.y + 2);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = h.color;
+        ctx.beginPath();
+        ctx.moveTo(base.x - 22, base.y - 6);
+        ctx.lineTo(base.x + 22, base.y + 6);
+        ctx.lineTo(top.x + 22, top.y + 6);
+        ctx.lineTo(top.x - 22, top.y - 6);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = "#0f172a";
+        ctx.beginPath();
+        ctx.moveTo(top.x - 22, top.y - 6);
+        ctx.lineTo(top.x, top.y - 18);
+        ctx.lineTo(top.x + 22, top.y + 6);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = h.cooldown > 0 ? "#475569" : "#fde68a";
+        ctx.fillRect(base.x - 4, base.y + 2, 8, 10);
+        ctx.fillStyle = h.cooldown > 0 ? "#9ca3af" : "#fef3c7";
+        ctx.fillRect(top.x - 16, top.y, 10, 8);
+        ctx.fillRect(top.x + 6, top.y + 4, 10, 8);
+
+        ctx.fillStyle = "rgba(255,255,255,0.55)";
+        ctx.font = "10px Inter";
+        ctx.fillText(
+          `${Math.round(Math.min(0.95, (h.baseProb + state.probAdd) * state.probMult) * 100)}%`,
+          base.x - 16,
+          base.y + 26
+        );
+      }
+
+      function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        gradient.addColorStop(0, "#0b1221");
+        gradient.addColorStop(1, "#0f172a");
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // suelo y calles en perspectiva
+        ctx.fillStyle = "#111827";
+        for (let gx = -2; gx <= 2; gx++) {
+          const worldX = (Math.floor(player.x / streetSpacing) + gx) * streetSpacing + streetSpacing / 2;
+          const start = worldToScreen(worldX, player.y - canvas.height);
+          const end = worldToScreen(worldX, player.y + canvas.height);
+          ctx.fillRect(start.x - streetWidth / 2, start.y, streetWidth, canvas.height * 2);
+        }
+        for (let gy = -2; gy <= 2; gy++) {
+          const worldY = (Math.floor(player.y / streetSpacing) + gy) * streetSpacing + streetSpacing / 2;
+          const start = worldToScreen(player.x - canvas.width, worldY);
+          ctx.fillRect(start.x, start.y - streetWidth / 2, canvas.width * 2, streetWidth);
+        }
+
+        houses
+          .slice()
+          .sort((a, b) => a.y - b.y)
+          .forEach((h) => drawHouse(h));
+
+        // player
+        const p = worldToScreen(player.x, player.y, -10);
+        ctx.fillStyle = player.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, player.r, 0, Math.PI * 2);
+        ctx.fill();
+
+        // drones
+        drones.forEach((d) => {
+          const pos = worldToScreen(d.x, d.y, -18);
+          ctx.fillStyle = d.color;
+          ctx.beginPath();
+          ctx.moveTo(pos.x, pos.y - 8);
+          ctx.lineTo(pos.x + 10, pos.y + 6);
+          ctx.lineTo(pos.x - 10, pos.y + 6);
+          ctx.closePath();
+          ctx.fill();
+        });
+
+        // interacción
+        const target = houses.find((h) => Math.hypot(player.x - h.x, player.y - h.y) < 36);
+        if (target) {
+          ctx.fillStyle = "rgba(34,211,238,0.9)";
+          ctx.fillRect(p.x - 28, p.y - 40, 56, 22);
+          ctx.fillStyle = "#0b1221";
+          ctx.font = "12px Inter";
+          ctx.fillText("E: Vender", p.x - 24, p.y - 24);
+        }
+
+        if (state.lastSaleResult) {
+          ctx.fillStyle = state.lastSaleResult === "Vendido" ? "#22d3ee" : "#f87171";
+          ctx.font = "14px Inter";
+          ctx.fillText(state.lastSaleResult, 12, canvas.height - 16);
+        }
+      }
+
+      function loop(timestamp) {
+        const now = timestamp / 1000;
+        const delta = now - state.tick;
+        state.tick = now;
+        update(delta || 0);
+        draw();
+        requestAnimationFrame(loop);
+      }
+
+      function autoSales(delta) {
+        const totalBps = state.bpsPassive + drones.reduce((acc, d) => acc + d.bps, 0);
+        if (totalBps <= 0) return;
+        state.bingos += totalBps * delta;
+        state.money += totalBps * delta * state.valuePerBingo;
+        renderHud();
+        renderUpgrades();
+      }
+
+      let lastAuto = performance.now();
+      function autoLoop(timestamp) {
+        const delta = (timestamp - lastAuto) / 1000;
+        lastAuto = timestamp;
+        autoSales(delta);
+        requestAnimationFrame(autoLoop);
+      }
+
+      document.addEventListener("keydown", (e) => {
+        keys.add(e.key);
+        if (e.key === "e" || e.key === "E") {
+          const target = houses.find((h) => Math.hypot(player.x - h.x, player.y - h.y) < 36);
+          if (target) attemptSale(target);
+        }
+      });
+      document.addEventListener("keyup", (e) => keys.delete(e.key));
+
+      ensureChunksAroundPlayer();
+      renderHud();
+      renderUpgrades();
+      state.tick = performance.now() / 1000;
+      requestAnimationFrame(loop);
+      requestAnimationFrame(autoLoop);
+    </script>
   </body>
 </html>
