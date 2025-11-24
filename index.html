@@ -201,11 +201,12 @@
       const hud = document.getElementById("hud");
       const upgradeList = document.getElementById("upgrades");
 
+      // --- Estado base y jugador ---
       const state = {
         money: 50,
         bingos: 0,
         valuePerBingo: 10,
-        bps: 0,
+        bpsPassive: 0,
         probAdd: 0,
         probMult: 1,
         speed: 150,
@@ -214,38 +215,62 @@
         lastSaleResult: null,
       };
 
-      const player = { x: 450, y: 300, r: 12, color: "#22d3ee", speedMultiplier: 1 };
+      const player = {
+        x: 0,
+        y: 0,
+        r: 12,
+        color: "#22d3ee",
+      };
+      const camera = { x: 0, y: 0 };
       const keys = new Set();
 
-      const streetGrid = {
-        vertical: [180, 420, 660],
-        horizontal: [140, 320, 500],
-        width: 70,
-      };
-
+      // --- Mundo procedural ---
       const houses = [];
-      const cols = [80, 300, 360, 520, 740, 820];
-      const rows = [70, 230, 290, 450, 530];
-      rows.forEach((y, yi) => {
-        cols.forEach((x, xi) => {
-          // Skip positions that would be inside a street
-          const inVertical = streetGrid.vertical.some(
-            (sx) => Math.abs(x - sx) < streetGrid.width / 2 + 22
-          );
-          const inHorizontal = streetGrid.horizontal.some(
-            (sy) => Math.abs(y - sy) < streetGrid.width / 2 + 22
-          );
-          if (inVertical || inHorizontal) return;
-          houses.push({
-            x,
-            y,
-            baseProb: 0.22 + ((xi + yi) % 3) * 0.03 + Math.random() * 0.05,
-            cooldown: 0,
-            color: `hsl(${220 + ((xi + yi) % 3) * 20}, 65%, 66%)`,
-          });
-        });
-      });
+      const generatedChunks = new Set();
+      const chunkSize = 320;
+      const streetSpacing = 220;
+      const streetWidth = 70;
+      const isoScale = 0.9;
+      const drones = [];
 
+      function isStreet(x, y) {
+        const dx = Math.abs(((x % streetSpacing) + streetSpacing) % streetSpacing - streetSpacing / 2);
+        const dy = Math.abs(((y % streetSpacing) + streetSpacing) % streetSpacing - streetSpacing / 2);
+        return dx < streetWidth / 2 || dy < streetWidth / 2;
+      }
+
+      function generateChunk(cx, cy) {
+        const key = `${cx},${cy}`;
+        if (generatedChunks.has(key)) return;
+        generatedChunks.add(key);
+        const startX = cx * chunkSize;
+        const startY = cy * chunkSize;
+        for (let x = startX + 40; x < startX + chunkSize - 40; x += 80) {
+          for (let y = startY + 40; y < startY + chunkSize - 40; y += 80) {
+            if (isStreet(x, y)) continue;
+            const colorHue = 210 + ((Math.abs(cx + cy) + (x + y)) % 40);
+            houses.push({
+              x,
+              y,
+              baseProb: 0.2 + Math.random() * 0.12,
+              cooldown: 0,
+              color: `hsl(${colorHue}, 62%, 65%)`,
+            });
+          }
+        }
+      }
+
+      function ensureChunksAroundPlayer() {
+        const cx = Math.floor(player.x / chunkSize);
+        const cy = Math.floor(player.y / chunkSize);
+        for (let dx = -1; dx <= 1; dx++) {
+          for (let dy = -1; dy <= 1; dy++) {
+            generateChunk(cx + dx, cy + dy);
+          }
+        }
+      }
+
+      // --- Mejoras y drones visibles ---
       const upgrades = [
         {
           id: "pitch",
@@ -259,13 +284,13 @@
         {
           id: "folletos",
           name: "Folletos premium",
-          desc: "+3% prob, +0.1 BPS",
+          desc: "+3% prob, +0.2 BPS",
           baseCost: 50,
           factor: 1.18,
           level: 0,
           apply: () => {
             state.probAdd += 0.03;
-            addBps(0.1);
+            addBpsPassive(0.2);
           },
         },
         {
@@ -314,20 +339,20 @@
         {
           id: "drone",
           name: "Dron básico",
-          desc: "+0.6 BPS",
+          desc: "+0.6 BPS (visible)",
           baseCost: 90,
           factor: 1.2,
           level: 0,
-          apply: () => addBps(0.6),
+          apply: () => addDrone({ speed: 240, bps: 0.6, color: "#22d3ee" }),
         },
         {
           id: "drone-adv",
           name: "Dron avanzado",
-          desc: "+2 BPS",
+          desc: "+2 BPS (visible)",
           baseCost: 250,
           factor: 1.28,
           level: 0,
-          apply: () => addBps(2),
+          apply: () => addDrone({ speed: 320, bps: 2, color: "#f472b6" }),
         },
         {
           id: "megafono",
@@ -341,34 +366,49 @@
         {
           id: "vallas",
           name: "Vallas en la ciudad",
-          desc: "+0.4 BPS y +5% valor",
+          desc: "+0.5 BPS y +5% valor",
           baseCost: 280,
           factor: 1.25,
           level: 0,
           apply: () => {
-            addBps(0.4);
+            addBpsPassive(0.5);
             state.valuePerBingo *= 1.05;
           },
         },
       ];
 
-      function addBps(value) {
-        state.bps += value;
+      function addBpsPassive(value) {
+        state.bpsPassive += value;
       }
 
+      function addDrone(config) {
+        drones.push({
+          x: player.x,
+          y: player.y,
+          target: null,
+          speed: config.speed,
+          bps: config.bps,
+          color: config.color,
+        });
+        renderHud();
+      }
+
+      // --- HUD y upgrades ---
       function format(num) {
         return num >= 1000 ? num.toFixed(0) : num.toFixed(1);
       }
 
       function renderHud() {
+        const totalBps = state.bpsPassive + drones.reduce((acc, d) => acc + d.bps, 0);
         hud.innerHTML = "";
         const stats = [
           { label: "Dinero", value: `$ ${state.money.toFixed(0)}` },
           { label: "Bingos totales", value: state.bingos.toFixed(0) },
-          { label: "Bingos/seg", value: format(state.bps) },
+          { label: "Bingos/seg", value: format(totalBps) },
           { label: "Prob. base", value: `${((0.25 + state.probAdd) * state.probMult * 100).toFixed(0)}%` },
           { label: "Velocidad", value: `${(state.speed / 150).toFixed(2)}x` },
           { label: "Vehículo", value: state.activeVehicle || "A pie" },
+          { label: "Drones", value: drones.length },
         ];
         stats.forEach((s) => {
           const div = document.createElement("div");
@@ -407,6 +447,7 @@
         renderUpgrades();
       }
 
+      // --- Ventas ---
       function attemptSale(house) {
         if (house.cooldown > 0) return;
         const prob = Math.min(0.95, (house.baseProb + state.probAdd) * state.probMult);
@@ -422,99 +463,157 @@
         renderUpgrades();
       }
 
+      // --- Entrada y simulación ---
       function update(delta) {
-        // input
         const vx = (keys.has("ArrowRight") || keys.has("d")) - (keys.has("ArrowLeft") || keys.has("a"));
         const vy = (keys.has("ArrowDown") || keys.has("s")) - (keys.has("ArrowUp") || keys.has("w"));
         const len = Math.hypot(vx, vy) || 1;
         const speed = state.speed * delta;
-        player.x = Math.min(canvas.width - player.r, Math.max(player.r, player.x + (vx / len) * speed));
-        player.y = Math.min(canvas.height - player.r, Math.max(player.r, player.y + (vy / len) * speed));
+        player.x += (vx / len) * speed;
+        player.y += (vy / len) * speed;
+
+        ensureChunksAroundPlayer();
 
         houses.forEach((h) => {
           if (h.cooldown > 0) h.cooldown -= delta;
         });
+
+        drones.forEach((d) => {
+          if (!d.target) d.target = pickHouseNearPlayer();
+          const target = d.target || { x: player.x, y: player.y };
+          const dx = target.x - d.x;
+          const dy = target.y - d.y;
+          const dist = Math.hypot(dx, dy);
+          if (dist > 4) {
+            d.x += (dx / dist) * d.speed * delta;
+            d.y += (dy / dist) * d.speed * delta;
+          } else {
+            d.target = pickHouseNearPlayer();
+          }
+        });
+
+        camera.x = player.x;
+        camera.y = player.y * 0.6; // ligera inclinación para sensación 3D
+      }
+
+      function pickHouseNearPlayer() {
+        if (houses.length === 0) return null;
+        const sorted = [...houses].sort(
+          (a, b) => Math.hypot(a.x - player.x, a.y - player.y) - Math.hypot(b.x - player.x, b.y - player.y)
+        );
+        return sorted[Math.min(sorted.length - 1, Math.floor(Math.random() * 6))] || null;
+      }
+
+      // --- Render isométrico ---
+      function worldToScreen(wx, wy, wz = 0) {
+        const rx = wx - camera.x;
+        const ry = wy - camera.y / 0.6;
+        const isoX = (rx - ry) * isoScale + canvas.width / 2;
+        const isoY = (rx + ry) * isoScale * 0.5 + canvas.height / 2 - wz;
+        return { x: isoX, y: isoY };
+      }
+
+      function drawHouse(h) {
+        const height = 26;
+        const base = worldToScreen(h.x, h.y);
+        const top = worldToScreen(h.x, h.y, -height);
+        ctx.fillStyle = "rgba(0,0,0,0.35)";
+        ctx.beginPath();
+        ctx.moveTo(base.x - 26, base.y - 8);
+        ctx.lineTo(base.x + 26, base.y + 8);
+        ctx.lineTo(base.x + 32, base.y + 18);
+        ctx.lineTo(base.x - 32, base.y + 2);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = h.color;
+        ctx.beginPath();
+        ctx.moveTo(base.x - 22, base.y - 6);
+        ctx.lineTo(base.x + 22, base.y + 6);
+        ctx.lineTo(top.x + 22, top.y + 6);
+        ctx.lineTo(top.x - 22, top.y - 6);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = "#0f172a";
+        ctx.beginPath();
+        ctx.moveTo(top.x - 22, top.y - 6);
+        ctx.lineTo(top.x, top.y - 18);
+        ctx.lineTo(top.x + 22, top.y + 6);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = h.cooldown > 0 ? "#475569" : "#fde68a";
+        ctx.fillRect(base.x - 4, base.y + 2, 8, 10);
+        ctx.fillStyle = h.cooldown > 0 ? "#9ca3af" : "#fef3c7";
+        ctx.fillRect(top.x - 16, top.y, 10, 8);
+        ctx.fillRect(top.x + 6, top.y + 4, 10, 8);
+
+        ctx.fillStyle = "rgba(255,255,255,0.55)";
+        ctx.font = "10px Inter";
+        ctx.fillText(
+          `${Math.round(Math.min(0.95, (h.baseProb + state.probAdd) * state.probMult) * 100)}%`,
+          base.x - 16,
+          base.y + 26
+        );
       }
 
       function draw() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = "#0d1628";
+        const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        gradient.addColorStop(0, "#0b1221");
+        gradient.addColorStop(1, "#0f172a");
+        ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // streets
-        ctx.fillStyle = "#1f2937";
-        streetGrid.vertical.forEach((x) => ctx.fillRect(x - streetGrid.width / 2, 0, streetGrid.width, canvas.height));
-        streetGrid.horizontal.forEach((y) => ctx.fillRect(0, y - streetGrid.width / 2, canvas.width, streetGrid.width));
-        ctx.setLineDash([14, 14]);
-        ctx.strokeStyle = "rgba(255,255,255,0.18)";
-        streetGrid.vertical.forEach((x) => {
-          ctx.beginPath();
-          ctx.moveTo(x, 0);
-          ctx.lineTo(x, canvas.height);
-          ctx.stroke();
-        });
-        streetGrid.horizontal.forEach((y) => {
-          ctx.beginPath();
-          ctx.moveTo(0, y);
-          ctx.lineTo(canvas.width, y);
-          ctx.stroke();
-        });
-        ctx.setLineDash([]);
+        // suelo y calles en perspectiva
+        ctx.fillStyle = "#111827";
+        for (let gx = -2; gx <= 2; gx++) {
+          const worldX = (Math.floor(player.x / streetSpacing) + gx) * streetSpacing + streetSpacing / 2;
+          const start = worldToScreen(worldX, player.y - canvas.height);
+          const end = worldToScreen(worldX, player.y + canvas.height);
+          ctx.fillRect(start.x - streetWidth / 2, start.y, streetWidth, canvas.height * 2);
+        }
+        for (let gy = -2; gy <= 2; gy++) {
+          const worldY = (Math.floor(player.y / streetSpacing) + gy) * streetSpacing + streetSpacing / 2;
+          const start = worldToScreen(player.x - canvas.width, worldY);
+          ctx.fillRect(start.x, start.y - streetWidth / 2, canvas.width * 2, streetWidth);
+        }
 
-        // houses
-        houses.forEach((h) => {
-          const pulse = h.cooldown > 0 ? 0.6 : 1;
-          ctx.save();
-          ctx.translate(h.x, h.y);
-          // shadow
-          ctx.fillStyle = "rgba(0,0,0,0.25)";
-          ctx.beginPath();
-          ctx.roundRect(-22, -18, 44, 36, 6);
-          ctx.fill();
-          // base
-          ctx.fillStyle = h.color;
-          ctx.beginPath();
-          ctx.roundRect(-20, -16, 40, 32, 6);
-          ctx.fill();
-          // roof
-          ctx.fillStyle = "#0f172a";
-          ctx.beginPath();
-          ctx.moveTo(-22, -16);
-          ctx.lineTo(0, -28 - pulse * 2);
-          ctx.lineTo(22, -16);
-          ctx.closePath();
-          ctx.fill();
-          // door
-          ctx.fillStyle = h.cooldown > 0 ? "#4b5563" : "#fde68a";
-          ctx.fillRect(-5, 4, 10, 12);
-          // windows
-          ctx.fillStyle = h.cooldown > 0 ? "#9ca3af" : "#fef3c7";
-          ctx.fillRect(-16, -6, 10, 8);
-          ctx.fillRect(6, -6, 10, 8);
-          ctx.restore();
-
-          ctx.fillStyle = "rgba(255,255,255,0.5)";
-          ctx.font = "10px Inter";
-          ctx.fillText(`${Math.round(Math.min(0.95, (h.baseProb + state.probAdd) * state.probMult) * 100)}%`, h.x - 16, h.y + 32);
-        });
+        houses
+          .slice()
+          .sort((a, b) => a.y - b.y)
+          .forEach((h) => drawHouse(h));
 
         // player
+        const p = worldToScreen(player.x, player.y, -10);
         ctx.fillStyle = player.color;
         ctx.beginPath();
-        ctx.arc(player.x, player.y, player.r, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, player.r, 0, Math.PI * 2);
         ctx.fill();
 
-        // interaction prompt
+        // drones
+        drones.forEach((d) => {
+          const pos = worldToScreen(d.x, d.y, -18);
+          ctx.fillStyle = d.color;
+          ctx.beginPath();
+          ctx.moveTo(pos.x, pos.y - 8);
+          ctx.lineTo(pos.x + 10, pos.y + 6);
+          ctx.lineTo(pos.x - 10, pos.y + 6);
+          ctx.closePath();
+          ctx.fill();
+        });
+
+        // interacción
         const target = houses.find((h) => Math.hypot(player.x - h.x, player.y - h.y) < 36);
         if (target) {
           ctx.fillStyle = "rgba(34,211,238,0.9)";
-          ctx.fillRect(player.x - 28, player.y - 40, 56, 22);
+          ctx.fillRect(p.x - 28, p.y - 40, 56, 22);
           ctx.fillStyle = "#0b1221";
           ctx.font = "12px Inter";
-          ctx.fillText("E: Vender", player.x - 24, player.y - 24);
+          ctx.fillText("E: Vender", p.x - 24, p.y - 24);
         }
 
-        // feedback
         if (state.lastSaleResult) {
           ctx.fillStyle = state.lastSaleResult === "Vendido" ? "#22d3ee" : "#f87171";
           ctx.font = "14px Inter";
@@ -532,9 +631,10 @@
       }
 
       function autoSales(delta) {
-        if (state.bps <= 0) return;
-        state.bingos += state.bps * delta;
-        state.money += state.bps * delta * state.valuePerBingo;
+        const totalBps = state.bpsPassive + drones.reduce((acc, d) => acc + d.bps, 0);
+        if (totalBps <= 0) return;
+        state.bingos += totalBps * delta;
+        state.money += totalBps * delta * state.valuePerBingo;
         renderHud();
         renderUpgrades();
       }
@@ -556,6 +656,7 @@
       });
       document.addEventListener("keyup", (e) => keys.delete(e.key));
 
+      ensureChunksAroundPlayer();
       renderHud();
       renderUpgrades();
       state.tick = performance.now() / 1000;
