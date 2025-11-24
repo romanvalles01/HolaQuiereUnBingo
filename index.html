@@ -1,11 +1,451 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Document</title>
+    <title>Diseño: Vendedor de Bingos</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0f172a;
+        --panel: #111827;
+        --text: #e5e7eb;
+        --muted: #9ca3af;
+        --accent: #22d3ee;
+        --accent-2: #f472b6;
+        --border: #1f2937;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+        background: radial-gradient(circle at 20% 20%, rgba(34, 211, 238, 0.08), transparent 25%),
+          radial-gradient(circle at 80% 0%, rgba(244, 114, 182, 0.08), transparent 25%),
+          var(--bg);
+        color: var(--text);
+        line-height: 1.6;
+      }
+      header {
+        padding: 40px 24px 16px;
+        text-align: center;
+      }
+      h1 {
+        margin: 0;
+        font-size: clamp(32px, 4vw, 44px);
+        letter-spacing: -0.03em;
+      }
+      h2 {
+        margin-top: 32px;
+        margin-bottom: 12px;
+        letter-spacing: -0.02em;
+      }
+      p {
+        margin-top: 0;
+      }
+      .container {
+        max-width: 1100px;
+        margin: 0 auto 64px;
+        padding: 0 24px 24px;
+        display: grid;
+        gap: 16px;
+      }
+      .section {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 20px 24px;
+        box-shadow: 0 15px 50px rgba(0, 0, 0, 0.35);
+      }
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        background: rgba(34, 211, 238, 0.12);
+        color: var(--accent);
+        border-radius: 999px;
+        font-weight: 600;
+        font-size: 13px;
+        border: 1px solid rgba(34, 211, 238, 0.35);
+      }
+      ul {
+        padding-left: 20px;
+        margin: 0;
+      }
+      li + li {
+        margin-top: 6px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 12px;
+      }
+      .pill-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 0;
+        margin: 0;
+        list-style: none;
+      }
+      .pill {
+        padding: 8px 12px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        font-weight: 600;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 12px;
+        font-size: 14px;
+      }
+      th,
+      td {
+        border: 1px solid var(--border);
+        padding: 10px 12px;
+        text-align: left;
+      }
+      th {
+        background: rgba(255, 255, 255, 0.04);
+      }
+      code,
+      pre {
+        font-family: "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, monospace;
+      }
+      pre {
+        background: #0b1221;
+        border: 1px solid var(--border);
+        padding: 14px;
+        border-radius: 12px;
+        overflow-x: auto;
+      }
+      .callout {
+        border-left: 4px solid var(--accent);
+        padding-left: 12px;
+        color: var(--muted);
+      }
+    </style>
   </head>
   <body>
-    <h1>hi</h1>
+    <header>
+      <div class="tag">Diseño de juego idle / incremental</div>
+      <h1>Ciudad del Bingo: Gira del Vendedor</h1>
+      <p>
+        Documento de diseño completo para un juego 2D top‑down donde recorres una ciudad vendiendo
+        bingos, mejoras tu pitch, compras vehículos y despliegas drones para automatizar ventas.
+      </p>
+    </header>
+
+    <main class="container">
+      <section class="section" id="concepto">
+        <h2>Resumen y estética</h2>
+        <p>
+          Vista superior (top‑down) que permite mostrar varias casas y rutas a la vez, facilitando el
+          ritmo de ventas. Estilo <strong>pixel art</strong> limpio con paleta reducida y UI minimalista
+          pensada para decisiones rápidas de compra. La ciudad se genera por secciones repetibles
+          (chunks) que alternan densidades de casas y modificadores de probabilidad.
+        </p>
+        <ul class="pill-list">
+          <li class="pill">Loop activo: caminar &gt; ofrecer &gt; cobrar</li>
+          <li class="pill">Loop idle: BPS por drones y habilidades</li>
+          <li class="pill">Progresión espacial: barrios con reglas propias</li>
+        </ul>
+      </section>
+
+      <section class="section" id="loop-basico">
+        <h2>Loop básico y cámaras</h2>
+        <div class="grid">
+          <div>
+            <h3>Loop activo (jugado)</h3>
+            <ul>
+              <li>Moverse por la calle y acercarse a una casa.</li>
+              <li>Al entrar en el área de interacción aparece un prompt (E/tecla).</li>
+              <li>Se calcula probabilidad de venta; resultado: vendido / no vendido.</li>
+              <li>Se otorga dinero y aumenta contador de bingos totales.</li>
+            </ul>
+          </div>
+          <div>
+            <h3>Loop idle (automático)</h3>
+            <ul>
+              <li>Drones y pasivos generan <strong>BPS</strong> a intervalos fijos.</li>
+              <li>Vehículos aumentan casas/minuto visitadas por el jugador.</li>
+              <li>Habilidades globales multiplican probabilidad y valor de venta.</li>
+              <li>El HUD muestra siempre Dinero / Bingos totales / BPS.</li>
+            </ul>
+          </div>
+        </div>
+        <p class="callout">
+          <strong>Cámara:</strong> top‑down ortográfica para visibilidad y lectura clara de casas;
+          mantiene colas de interacción simples y evita problemas de plataforma.
+        </p>
+      </section>
+
+      <section class="section" id="mecanicas">
+        <h2>Mecánicas principales</h2>
+        <ul>
+          <li>Interacción casa con cooldown corto para evitar spam.</li>
+          <li>Rachas: vender X seguidos otorga multiplicador temporal a probabilidad y valor.</li>
+          <li>Eventos de barrio: fiesta (+prob), lluvia (−prob pero más casas activas).</li>
+          <li>Misiones diarias: metas rápidas con recompensa de dinero/BPS.</li>
+          <li>Skins/uniformes: cosméticos con buffs ligeros acumulables.</li>
+        </ul>
+      </section>
+
+      <section class="section" id="progresion">
+        <h2>Progresión y upgrades</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Mejora</th>
+              <th>Efecto</th>
+              <th>Coste base</th>
+              <th>Factor</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Discurso convincente</td>
+              <td>+5% probabilidad por nivel</td>
+              <td>50</td>
+              <td>1.15</td>
+            </tr>
+            <tr>
+              <td>Folletos premium</td>
+              <td>+3% prob. y +0.05 BPS por nivel</td>
+              <td>120</td>
+              <td>1.16</td>
+            </tr>
+            <tr>
+              <td>Uniforme pro</td>
+              <td>+1% prob. y +5% velocidad</td>
+              <td>180</td>
+              <td>1.2</td>
+            </tr>
+            <tr>
+              <td>Carisma</td>
+              <td>Multiplicador 1.05^nivel a probabilidad</td>
+              <td>220</td>
+              <td>1.22</td>
+            </tr>
+            <tr>
+              <td>Logística</td>
+              <td>+casas/minuto (afecta visitas y BPS híbrido)</td>
+              <td>260</td>
+              <td>1.18</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="section" id="vehiculos">
+        <h2>Vehículos y movilidad</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Vehículo</th>
+              <th>Beneficio</th>
+              <th>Desbloqueo</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Bicicleta</td>
+              <td>+40% velocidad, acceso Barrio Residencial</td>
+              <td>Coste 400</td>
+            </tr>
+            <tr>
+              <td>Moto</td>
+              <td>+120% velocidad, +10% prob. en zonas ruidosas</td>
+              <td>Coste 1200, requiere bici</td>
+            </tr>
+            <tr>
+              <td>Auto</td>
+              <td>+200% velocidad, acceso Centro de alta densidad</td>
+              <td>Coste 3200, requiere moto</td>
+            </tr>
+            <tr>
+              <td>Van automática</td>
+              <td>+8 BPS híbrido, ruta propia por Suburbios</td>
+              <td>Coste 6500, requiere auto</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="section" id="drones">
+        <h2>Drones y automatización</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Generación</th>
+              <th>BPS</th>
+              <th>Notas</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Drone básico</td>
+              <td>+0.5</td>
+              <td>Coste 200, factor 1.15</td>
+            </tr>
+            <tr>
+              <td>Drone avanzado</td>
+              <td>+2</td>
+              <td>Requiere 5 básicos; coste 950, factor 1.17</td>
+            </tr>
+            <tr>
+              <td>Swarm urbano</td>
+              <td>+6</td>
+              <td>Se potencia con eventos de barrio (+20% BPS en fiesta)</td>
+            </tr>
+            <tr>
+              <td>Central logística</td>
+              <td>+18</td>
+              <td>Multiplica prob. global x1.1 mientras esté operativa</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="section" id="economia">
+        <h2>Economía y fórmulas</h2>
+        <ul>
+          <li>Ingreso por venta: valor base 10; barrios premium multiplican 1.5–2x.</li>
+          <li>Costos de upgrades: <code>coste = base * factor^nivel</code> (factor 1.12–1.25).</li>
+          <li>
+            BPS total: suma de fuentes automáticas * multiplicadores globales (carisma, eventos,
+            rachas).
+          </li>
+          <li>Rachas: cada 5 ventas seguidas, +20% prob. y +15% valor por 30 s.</li>
+          <li>Ajuste de balance: probabilidad máxima clamp 95% para mantener riesgo.</li>
+        </ul>
+      </section>
+
+      <section class="section" id="hud">
+        <h2>HUD propuesto</h2>
+        <div class="grid">
+          <div>
+            <h3>Barra superior</h3>
+            <ul>
+              <li>Dinero (icono $) siempre visible.</li>
+              <li>Bingos totales vendidos.</li>
+              <li>BPS (bingos por segundo) con tooltip de desglose.</li>
+            </ul>
+          </div>
+          <div>
+            <h3>Lateral izquierdo</h3>
+            <ul>
+              <li>Panel de upgrades en lista con costo y efecto resumido.</li>
+              <li>Pestañas: Habilidades / Vehículos / Drones.</li>
+              <li>Indicador de disponibilidad (botón verde si hay dinero suficiente).</li>
+            </ul>
+          </div>
+          <div>
+            <h3>Lateral derecho</h3>
+            <ul>
+              <li>Eventos activos con temporizador.</li>
+              <li>Misiones diarias y recompensas.</li>
+              <li>Notificaciones flotantes: +$ y "Vendido/No vendido".</li>
+            </ul>
+          </div>
+          <div>
+            <h3>Centro</h3>
+            <ul>
+              <li>Mapa top‑down con casas y áreas de interacción.</li>
+              <li>Iconos de racha y feedback visual por éxito/fallo.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="arquitectura">
+        <h2>Arquitectura técnica</h2>
+        <div class="grid">
+          <div>
+            <h3>Sistemas clave</h3>
+            <ul>
+              <li><strong>GameManager</strong>: dinero, bingos totales, BPS, guardado/carga.</li>
+              <li><strong>Player</strong>: movimiento, interacción; referencia a stats globales.</li>
+              <li><strong>House</strong>: probabilidad base, modificador de barrio, cooldown.</li>
+              <li><strong>UpgradeManager</strong>: catálogo y aplicación de efectos.</li>
+              <li><strong>AutoSalesSystem</strong>: ticks de BPS y fuentes automáticas.</li>
+              <li><strong>VehicleController</strong>: equipo actual y acceso a barrios.</li>
+              <li><strong>UIManager</strong>: HUD y notificaciones.</li>
+              <li><strong>SaveSystem</strong>: serialización de estado y progreso offline.</li>
+            </ul>
+          </div>
+          <div>
+            <h3>Datos y modelos</h3>
+            <ul>
+              <li>Casas: <code>baseProb</code>, <code>multBarrio</code>, <code>premium</code>, <code>cooldown</code>.</li>
+              <li>Distritos: assets/JSON con modificadores de probabilidad y valor.</li>
+              <li>Upgrades: <code>id</code>, <code>tipo</code>, <code>baseCost</code>, <code>factor</code>, <code>valor</code>.</li>
+              <li>Fuentes BPS: lista (drones, vans, pasivos) con <code>bpsValue</code> y multiplicadores.</li>
+              <li>Guardado: dinero, bingos, niveles, vehículos comprados, barrio desbloqueado, timestamp.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="pseudocodigo">
+        <h2>Pseudocódigo esencial</h2>
+        <h3>Probabilidad de venta</h3>
+        <pre><code>function AttemptSale(house, stats):
+    prob = house.baseProb * house.multBarrio
+    prob *= (1 + stats.probAdicional) * stats.probMultiplicador
+    prob += stats.bonusPlano
+    prob = clamp(prob, 0, 0.95)
+
+    if Random01() &lt; prob:
+        OnSaleSuccess(house)
+    else:
+        OnSaleFail(house)</code></pre>
+
+        <h3>BPS y ventas automáticas</h3>
+        <pre><code>function UpdateAutoSales(delta):
+    acumulado += delta
+    if acumulado &gt;= tick:        # tick = 0.5 s
+        bingos = BPS * acumulado
+        Estado.totalBingos += bingos
+        Estado.dinero += bingos * Estado.valorBingo
+        acumulado = 0
+
+function RecalcularBPS():
+    BPS = 0
+    for fuente in fuentesAuto:
+        BPS += fuente.bpsValue
+    BPS *= Estado.multiBPS</code></pre>
+
+        <h3>Compra de mejoras</h3>
+        <pre><code>function GetUpgradeCost(up):
+    return up.baseCost * pow(up.factor, up.nivel)
+
+function BuyUpgrade(id):
+    up = catalogo[id]
+    costo = GetUpgradeCost(up)
+    if Estado.dinero &gt;= costo:
+        Estado.dinero -= costo
+        up.nivel += 1
+        ApplyUpgradeEffect(up)
+
+function ApplyUpgradeEffect(up):
+    switch up.tipo:
+        case "Probabilidad":
+            Estado.stats.probAdicional += up.valor
+        case "ProbMult":
+            Estado.stats.probMultiplicador *= (1 + up.valor)
+        case "BPS":
+            AddAutoSource(up.id, up.valor)
+            RecalcularBPS()
+        case "Velocidad":
+            Player.velocidad *= (1 + up.valor)
+        case "ValorVenta":
+            Estado.valorBingo *= (1 + up.valor)</code></pre>
+      </section>
+    </main>
   </body>
 </html>
